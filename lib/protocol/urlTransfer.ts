@@ -132,17 +132,24 @@ class PreSignedUrlFileSource implements FileSource {
 
       const getStream = await getStreamPromise;
 
-      const chunk = getStream.read(length);
+      let chunk = getStream.read(length);
       if(chunk === null) {
-        // now we need to wait until some data is available
-        getStream.once('data', (data) => {
-          console.log('data');
-          
-          callback(null, data.length, data);
+        await new Promise((resolve) => {
+          getStream.once('readable', () => {
+            console.log('readable');
+            resolve(null);
+          });
         });
-      } else {
-        callback(null, chunk.length, chunk);
+        chunk = getStream.read(length);
+        if(chunk === null) {
+          throw new Error('No data available');
+        }
       }
+      
+      // now we need to update the buffer
+      chunk.copy(buffer, offset);
+      callback(null, chunk.length, buffer);
+      
     } catch (err) {
       callback(err as Error, 0, null);
     }
